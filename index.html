@@ -101,18 +101,34 @@
   <label><input id="trail-toggle" type="checkbox" checked> 軌跡線</label>
 </div>
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
-  }
-}
+<div id="error-overlay" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+     padding:18px 22px; background:#400; color:#fee; border:1px solid #a44; border-radius:8px;
+     font-size:13px; max-width:520px; display:none; z-index:1000; line-height:1.6;"></div>
+
+<script>
+  // Surface any uncaught errors so the screen is never silently blank.
+  window.addEventListener('error', (e) => {
+    const el = document.getElementById('error-overlay');
+    if (!el) return;
+    el.style.display = 'block';
+    el.textContent = '読み込みエラー: ' + (e.message || e.error || e) +
+      '  ／ オフライン環境では CDN(esm.sh) に到達できないため、ローカルで `python3 -m http.server` を起動してから http://localhost:8000/ で開いてください。';
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    const el = document.getElementById('error-overlay');
+    if (!el) return;
+    el.style.display = 'block';
+    el.textContent = 'モジュール読込失敗: ' + (e.reason && (e.reason.message || e.reason)) +
+      '  ／ ネットワークが届かない場合は同梱の README の手順でローカル起動してください。';
+  });
 </script>
 
 <script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+// オフライン環境でも動くようローカル同梱の Three.js を読み込む。
+// `file://` 直開きはブラウザのモジュール CORS で失敗するため、
+// 同ディレクトリで `python3 -m http.server` を起動して http://localhost:8000/ で開いてください。
+import * as THREE from './vendor/three.module.js';
+import { OrbitControls } from './vendor/OrbitControls.js';
 
 // --- Configuration -------------------------------------------------
 
