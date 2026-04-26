@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>3I/ATLAS 軌跡シミュレーション</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden;
+    font-family: -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; color: #eee; }
+  #container { width: 100vw; height: 100vh; display: block; }
+
+  #info {
+    position: absolute; top: 12px; left: 12px;
+    background: rgba(10, 14, 28, 0.78); padding: 14px 16px; border-radius: 8px;
+    font-size: 13px; max-width: 340px; line-height: 1.55;
+    border: 1px solid rgba(120, 160, 255, 0.25);
+    backdrop-filter: blur(6px);
+  }
+  #info h3 { margin: 0 0 4px 0; font-size: 16px; color: #9ec3ff; letter-spacing: 0.04em; }
+  #info .sub { color: #9aa; font-size: 11px; margin-bottom: 8px; }
+  #info hr { border: 0; border-top: 1px solid rgba(255,255,255,0.12); margin: 8px 0; }
+  #info .row { display: flex; justify-content: space-between; gap: 12px; }
+  #info .row span:first-child { color: #8aa; }
+  #info .row span:last-child { color: #fff; font-variant-numeric: tabular-nums; }
+  #status-tag {
+    display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px;
+    background: #234; color: #cef; margin-top: 6px;
+  }
+
+  #legend {
+    position: absolute; top: 12px; right: 12px;
+    background: rgba(10, 14, 28, 0.78); padding: 10px 14px; border-radius: 8px;
+    font-size: 12px; line-height: 1.7;
+    border: 1px solid rgba(120, 160, 255, 0.25);
+  }
+  #legend .item { display: flex; align-items: center; gap: 8px; }
+  #legend .swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  #legend .line { width: 18px; height: 2px; display: inline-block; }
+
+  #controls {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(10, 14, 28, 0.85); padding: 12px 18px; border-radius: 10px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center;
+    border: 1px solid rgba(120, 160, 255, 0.25);
+    max-width: 92vw;
+  }
+  button {
+    background: #1a2647; color: #cdf; border: 1px solid #3a5;
+    border-color: rgba(120, 160, 255, 0.4); padding: 6px 14px; cursor: pointer;
+    border-radius: 4px; font-size: 13px;
+  }
+  button:hover { background: #243466; }
+  #date-slider { width: 360px; max-width: 50vw; }
+  select { background: #1a2647; color: #cdf; border: 1px solid rgba(120, 160, 255, 0.4);
+    padding: 4px 6px; border-radius: 4px; }
+  label { font-size: 12px; color: #9ab; }
+  input[type=checkbox] { vertical-align: middle; }
+</style>
+</head>
+<body>
+<div id="container"></div>
+
+<div id="info">
+  <h3>3I/ATLAS</h3>
+  <div class="sub">C/2025 N1 — 3例目の恒星間天体 (Interstellar Object)</div>
+  <hr>
+  <div class="row"><span>日付</span><span id="date-display">—</span></div>
+  <div class="row"><span>太陽距離 r</span><span id="distance-display">—</span></div>
+  <div class="row"><span>速度 v</span><span id="speed-display">—</span></div>
+  <div class="row"><span>真近点角 ν</span><span id="anomaly-display">—</span></div>
+  <div><span id="status-tag">—</span></div>
+  <hr>
+  <div class="sub" style="margin:0">
+    軌道要素 (J2000): e≈6.14, q≈1.357 AU, i≈175.1°<br>
+    近日点通過: 2025-10-29 (双曲線軌道・逆行)
+  </div>
+</div>
+
+<div id="legend">
+  <div class="item"><span class="swatch" style="background:#ffdd55;"></span> 太陽</div>
+  <div class="item"><span class="swatch" style="background:#3366ff;"></span> 地球</div>
+  <div class="item"><span class="swatch" style="background:#ff5533;"></span> 火星</div>
+  <div class="item"><span class="swatch" style="background:#ddaa66;"></span> 木星</div>
+  <div class="item"><span class="line"  style="background:#66ffcc;"></span> 3I/ATLAS 軌跡</div>
+  <div class="item"><span class="swatch" style="background:#66ffcc;"></span> 3I/ATLAS</div>
+</div>
+
+<div id="controls">
+  <button id="play-btn">▶ 再生</button>
+  <button id="reset-btn">⟲ リセット</button>
+  <input id="date-slider" type="range" min="0" max="2000" value="0" step="1">
+  <label>速度
+    <select id="speed-select">
+      <option value="0.25">0.25×</option>
+      <option value="1" selected>1×</option>
+      <option value="3">3×</option>
+      <option value="10">10×</option>
+      <option value="30">30×</option>
+    </select>
+  </label>
+  <label><input id="follow-toggle" type="checkbox"> 追尾</label>
+  <label><input id="trail-toggle" type="checkbox" checked> 軌跡線</label>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// --- Configuration -------------------------------------------------
+
+// 3I/ATLAS orbital elements (J2000 ecliptic, approximate published values)
+const ATLAS = {
+  q:     1.3567,    // perihelion distance (AU)
+  e:     6.1402,    // eccentricity (hyperbolic)
+  iDeg:  175.113,   // inclination (deg) — retrograde, near ecliptic
+  ODeg:  322.16,    // longitude of ascending node (deg)
+  wDeg:  127.99,    // argument of perihelion (deg)
+  Tp:    2025 + (31+28+31+30+31+30+31+31+30+29 - 1) / 365.25
+                    // perihelion epoch ≈ 2025 Oct 29  (decimal year)
+};
+
+// Time window of the simulation: 1 year before to 1 year after perihelion.
+const T_START = ATLAS.Tp - 1.0;
+const T_END   = ATLAS.Tp + 1.0;
+
+// Planets: simplified circular coplanar orbits — adequate for illustrative scale.
+const PLANETS = [
+  { name:'Mercury', a:0.387, period:0.2408, color:0xaaaaaa, size:0.020 },
+  { name:'Venus',   a:0.723, period:0.6152, color:0xffcc88, size:0.030 },
+  { name:'Earth',   a:1.000, period:1.0000, color:0x3a7dff, size:0.032 },
+  { name:'Mars',    a:1.524, period:1.8809, color:0xff5533, size:0.026 },
+  { name:'Jupiter', a:5.203, period:11.862, color:0xddaa66, size:0.110 },
+  { name:'Saturn',  a:9.537, period:29.457, color:0xeec88a, size:0.090 }
+];
+
+// --- Math: hyperbolic orbit ---------------------------------------
+
+function deg2rad(d) { return d * Math.PI / 180; }
+
+// Returns heliocentric ecliptic position (AU) of 3I/ATLAS at time t (decimal year).
+function atlasState(t) {
+  const e = ATLAS.e;
+  const q = ATLAS.q;
+  const a = q / (e - 1);                                   // |a|, AU
+  const n = 2 * Math.PI * Math.sqrt(1 / (a*a*a));          // mean motion (rad / year, μ=4π²)
+  const M = n * (t - ATLAS.Tp);                            // mean anomaly
+
+  // Solve hyperbolic Kepler equation: M = e·sinh F − F
+  let F = (Math.abs(M) < 1) ? M / (e - 1) : Math.sign(M) * Math.log(2*Math.abs(M)/e + 1.8);
+  for (let k = 0; k < 60; k++) {
+    const f  = e * Math.sinh(F) - F - M;
+    const fp = e * Math.cosh(F) - 1;
+    const dF = f / fp;
+    F -= dF;
+    if (Math.abs(dF) < 1e-12) break;
+  }
+
+  // True anomaly ν
+  const nu = 2 * Math.atan2(
+    Math.sqrt(e+1) * Math.sinh(F/2),
+    Math.sqrt(e-1) * Math.cosh(F/2)
+  );
+
+  const r  = a * (e*e - 1) / (1 + e * Math.cos(nu));
+
+  // Perifocal frame
+  const xp = r * Math.cos(nu);
+  const yp = r * Math.sin(nu);
+
+  // Rotation perifocal → ecliptic: R = Rz(Ω) Rx(i) Rz(ω)
+  const O = deg2rad(ATLAS.ODeg);
+  const i = deg2rad(ATLAS.iDeg);
+  const w = deg2rad(ATLAS.wDeg);
+  const cO = Math.cos(O), sO = Math.sin(O);
+  const ci = Math.cos(i), si = Math.sin(i);
+  const cw = Math.cos(w), sw = Math.sin(w);
+
+  const x = (cO*cw - sO*sw*ci) * xp + (-cO*sw - sO*cw*ci) * yp;
+  const y = (sO*cw + cO*sw*ci) * xp + (-sO*sw + cO*cw*ci) * yp;
+  const z = (sw*si)            * xp + ( cw*si)            * yp;
+
+  // Speed via vis-viva (hyperbolic: 1/a_signed = -1/|a|), μ = 4π² AU³/yr²
+  const v_AU_yr = Math.sqrt(4*Math.PI*Math.PI * (2/r + 1/a));
+  const v_kms   = v_AU_yr * 4.74047;                       // 1 AU/yr ≈ 4.74047 km/s
+
+  return { x, y, z, r, nu, v_kms };
+}
+
+// --- Three.js scene -----------------------------------------------
+
+const container = document.getElementById('container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000008);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.01, 2000);
+camera.position.set(6, 5, 8);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+container.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+
+// Map ecliptic (x,y,z) → Three.js (x, z_ecl, -y_ecl) so that ecliptic plane is X-Z.
+function eclToThree(p) {
+  return new THREE.Vector3(p.x, p.z, -p.y);
+}
+
+// Stars
+{
+  const N = 4000;
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(N*3);
+  for (let i = 0; i < N; i++) {
+    // random direction on sphere
+    const u = Math.random()*2 - 1;
+    const t = Math.random()*2*Math.PI;
+    const s = Math.sqrt(1 - u*u);
+    const R = 800 + Math.random()*200;
+    pos[3*i  ] = R * s * Math.cos(t);
+    pos[3*i+1] = R * u;
+    pos[3*i+2] = R * s * Math.sin(t);
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.7, sizeAttenuation: false });
+  scene.add(new THREE.Points(geo, mat));
+}
+
+// Sun
+{
+  const sun = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 32, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffdd55 })
+  );
+  scene.add(sun);
+  // glow
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.32, 32, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffaa33, transparent: true, opacity: 0.18 })
+  );
+  scene.add(glow);
+  scene.add(new THREE.PointLight(0xffffff, 2.0, 0, 0));
+}
+scene.add(new THREE.AmbientLight(0x445566, 0.6));
+
+// Ecliptic reference grid
+{
+  const grid = new THREE.GridHelper(20, 20, 0x223344, 0x111a22);
+  grid.position.y = 0;
+  scene.add(grid);
+}
+
+// Planets
+const planetMeshes = [];
+for (const p of PLANETS) {
+  // Orbit ring
+  const ringGeo = new THREE.BufferGeometry();
+  const segs = 256;
+  const pts = new Float32Array(segs*3);
+  for (let k = 0; k < segs; k++) {
+    const a = (k / (segs-1)) * 2 * Math.PI;
+    pts[3*k  ] = p.a * Math.cos(a);
+    pts[3*k+1] = 0;
+    pts[3*k+2] = p.a * Math.sin(a);
+  }
+  ringGeo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+  scene.add(new THREE.Line(ringGeo,
+    new THREE.LineBasicMaterial({ color: p.color, transparent: true, opacity: 0.35 })));
+
+  // Body
+  const mat = (p.name === 'Earth' || p.name === 'Jupiter' || p.name === 'Mars')
+    ? new THREE.MeshStandardMaterial({ color: p.color, emissive: p.color, emissiveIntensity: 0.25, roughness: 0.7 })
+    : new THREE.MeshStandardMaterial({ color: p.color, emissive: p.color, emissiveIntensity: 0.15, roughness: 0.8 });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(p.size, 24, 24), mat);
+  scene.add(mesh);
+  planetMeshes.push({ ...p, mesh });
+}
+
+// 3I/ATLAS full trajectory line (sampled over T_START..T_END)
+let trajectoryLine;
+{
+  const N = 1500;
+  const pts = new Float32Array(N*3);
+  for (let k = 0; k < N; k++) {
+    const t = T_START + (T_END - T_START) * k / (N-1);
+    const s = atlasState(t);
+    const v = eclToThree(s);
+    pts[3*k] = v.x; pts[3*k+1] = v.y; pts[3*k+2] = v.z;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+  trajectoryLine = new THREE.Line(geo,
+    new THREE.LineBasicMaterial({ color: 0x66ffcc, transparent: true, opacity: 0.55 }));
+  scene.add(trajectoryLine);
+}
+
+// 3I/ATLAS body + comet tail
+const atlasGroup = new THREE.Group();
+const atlasBody = new THREE.Mesh(
+  new THREE.SphereGeometry(0.05, 20, 20),
+  new THREE.MeshBasicMaterial({ color: 0x66ffcc })
+);
+atlasGroup.add(atlasBody);
+
+// Soft glow halo around the comet
+const atlasHalo = new THREE.Mesh(
+  new THREE.SphereGeometry(0.11, 20, 20),
+  new THREE.MeshBasicMaterial({ color: 0x66ffcc, transparent: true, opacity: 0.25 })
+);
+atlasGroup.add(atlasHalo);
+scene.add(atlasGroup);
+
+// Dynamic "tail" — accumulated past positions, fades over time
+const TAIL_MAX = 600;
+const tailGeo  = new THREE.BufferGeometry();
+const tailPos  = new Float32Array(TAIL_MAX * 3);
+const tailCol  = new Float32Array(TAIL_MAX * 3);
+tailGeo.setAttribute('position', new THREE.BufferAttribute(tailPos, 3).setUsage(THREE.DynamicDrawUsage));
+tailGeo.setAttribute('color',    new THREE.BufferAttribute(tailCol, 3).setUsage(THREE.DynamicDrawUsage));
+const tailLine = new THREE.Line(tailGeo,
+  new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9 }));
+scene.add(tailLine);
+let tailFilled = 0;
+let lastTimeForTail = -Infinity;
+
+// --- Time / UI control --------------------------------------------
+
+const slider     = document.getElementById('date-slider');
+const playBtn    = document.getElementById('play-btn');
+const resetBtn   = document.getElementById('reset-btn');
+const speedSel   = document.getElementById('speed-select');
+const followChk  = document.getElementById('follow-toggle');
+const trailChk   = document.getElementById('trail-toggle');
+
+const dateEl     = document.getElementById('date-display');
+const distEl     = document.getElementById('distance-display');
+const speedEl    = document.getElementById('speed-display');
+const anomEl     = document.getElementById('anomaly-display');
+const statusEl   = document.getElementById('status-tag');
+
+let playing = false;
+let simTime = T_START;          // decimal year
+const SPAN  = T_END - T_START;  // total years
+
+playBtn.addEventListener('click', () => {
+  playing = !playing;
+  playBtn.textContent = playing ? '❚❚ 一時停止' : '▶ 再生';
+});
+resetBtn.addEventListener('click', () => {
+  simTime = T_START;
+  slider.value = 0;
+  resetTail();
+});
+slider.addEventListener('input', () => {
+  simTime = T_START + SPAN * (slider.value / slider.max);
+  resetTail();
+});
+trailChk.addEventListener('change', () => {
+  tailLine.visible = trailChk.checked;
+});
+
+function resetTail() {
+  tailFilled = 0;
+  lastTimeForTail = -Infinity;
+}
+
+function decYearToDate(y) {
+  const year = Math.floor(y);
+  const rem  = y - year;
+  const isLeap = (year%4===0 && year%100!==0) || year%400===0;
+  const days = (isLeap ? 366 : 365) * rem;
+  const d = new Date(Date.UTC(year, 0, 1));
+  d.setUTCDate(d.getUTCDate() + Math.floor(days));
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth()+1).padStart(2,'0');
+  const dd = String(d.getUTCDate()).padStart(2,'0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function planetPos(p, t) {
+  const phase = 2 * Math.PI * (t / p.period);
+  return new THREE.Vector3(p.a * Math.cos(phase), 0, p.a * Math.sin(phase));
+}
+
+// --- Render loop --------------------------------------------------
+
+let lastFrame = performance.now();
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt  = (now - lastFrame) / 1000; // sec
+  lastFrame = now;
+
+  if (playing) {
+    const speed = parseFloat(speedSel.value);
+    // Advance: traverse the full SPAN in ~40 s at 1×
+    simTime += dt * (SPAN / 40) * speed;
+    if (simTime > T_END) { simTime = T_END; playing = false; playBtn.textContent = '▶ 再生'; }
+    slider.value = ((simTime - T_START) / SPAN) * slider.max;
+  }
+
+  // Planets
+  for (const p of planetMeshes) {
+    const v = planetPos(p, simTime);
+    p.mesh.position.copy(v);
+  }
+
+  // 3I/ATLAS
+  const s = atlasState(simTime);
+  const av = eclToThree(s);
+  atlasGroup.position.copy(av);
+
+  // Tail update — append a new vertex when time advances enough
+  if (trailChk.checked && simTime > lastTimeForTail + (SPAN / TAIL_MAX) * 0.5) {
+    if (tailFilled < TAIL_MAX) {
+      tailPos[3*tailFilled  ] = av.x;
+      tailPos[3*tailFilled+1] = av.y;
+      tailPos[3*tailFilled+2] = av.z;
+      tailFilled++;
+    } else {
+      // shift left
+      tailPos.copyWithin(0, 3, TAIL_MAX*3);
+      tailPos[3*(TAIL_MAX-1)  ] = av.x;
+      tailPos[3*(TAIL_MAX-1)+1] = av.y;
+      tailPos[3*(TAIL_MAX-1)+2] = av.z;
+    }
+    // recolor: older = darker, newer = brighter (cyan→white near head)
+    for (let k = 0; k < tailFilled; k++) {
+      const f = k / Math.max(1, tailFilled-1);
+      tailCol[3*k  ] = 0.4 * f;
+      tailCol[3*k+1] = 1.0;
+      tailCol[3*k+2] = 0.8 + 0.2*f;
+    }
+    tailGeo.setDrawRange(0, tailFilled);
+    tailGeo.attributes.position.needsUpdate = true;
+    tailGeo.attributes.color.needsUpdate    = true;
+    lastTimeForTail = simTime;
+  }
+
+  // Camera follow
+  if (followChk.checked) {
+    const target = av.clone();
+    controls.target.lerp(target, 0.1);
+  } else {
+    controls.target.lerp(new THREE.Vector3(0,0,0), 0.04);
+  }
+  controls.update();
+
+  // HUD
+  dateEl.textContent  = decYearToDate(simTime);
+  distEl.textContent  = `${s.r.toFixed(3)} AU`;
+  speedEl.textContent = `${s.v_kms.toFixed(2)} km/s`;
+  anomEl.textContent  = `${(s.nu * 180/Math.PI).toFixed(1)}°`;
+
+  let label, bg;
+  if (Math.abs(simTime - ATLAS.Tp) < 0.03)      { label = '近日点付近';     bg = '#a64'; }
+  else if (simTime < ATLAS.Tp && s.r > 5)       { label = '太陽系へ接近中'; bg = '#246'; }
+  else if (simTime < ATLAS.Tp)                  { label = '内側へ接近中';   bg = '#247'; }
+  else if (simTime > ATLAS.Tp && s.r < 5)       { label = '離脱中';         bg = '#642'; }
+  else                                          { label = '太陽系外へ離脱'; bg = '#522'; }
+  statusEl.textContent = label;
+  statusEl.style.background = bg;
+
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
